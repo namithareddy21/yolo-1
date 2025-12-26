@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Real-Time Object Detection</title>
+
+<style>
+body{
+    margin:0;
+    font-family:"Segoe UI",sans-serif;
+    background:linear-gradient(180deg,#eef3f8,#dde7f0);
+    color:#2c3e50;
+}
+h1{
+    text-align:center;
+    letter-spacing:6px;
+    margin-top:35px;
+}
+.btn-container{
+    text-align:center;
+    margin:25px 0;
+}
+button{
+    background:#6ec1a5;
+    border:none;
+    padding:12px 28px;
+    margin:0 10px;
+    font-size:16px;
+    border-radius:25px;
+    color:white;
+    cursor:pointer;
+}
+.main-container{
+    display:flex;
+    justify-content:center;
+    gap:40px;
+    padding:20px 60px;
+}
+.box{
+    width:480px;
+    height:340px;
+    background:white;
+    border-radius:20px;
+    box-shadow:0 15px 25px rgba(0,0,0,0.1);
+    padding:15px;
+}
+.box h3{text-align:center;}
+video,canvas{
+    width:100%;
+    height:260px;
+    border-radius:12px;
+    background:#eaeaea;
+}
+.bottom-info{
+    width:70%;
+    margin:25px auto;
+    background:white;
+    border-radius:18px;
+    padding:18px;
+    box-shadow:0 12px 22px rgba(0,0,0,0.1);
+    text-align:center;
+}
+.count{font-size:18px;font-weight:bold;color:#2e8b57;}
+</style>
+</head>
+
+<body>
+
+<h1>REAL-TIME OBJECT DETECTION</h1>
+
+<div class="btn-container">
+    <button onclick="startDetection()">Start Detection</button>
+    <button onclick="stopDetection()">Stop Detection</button>
+</div>
+
+<div class="main-container">
+    <div class="box">
+        <h3>Input (Live Camera)</h3>
+        <video id="video" autoplay muted></video>
+    </div>
+
+    <div class="box">
+        <h3>Output (Detection)</h3>
+        <canvas id="canvas" width="480" height="260"></canvas>
+    </div>
+</div>
+
+<div class="bottom-info">
+    <div class="count" id="count">Total Objects Detected: 0</div>
+    <div id="desc">Click Start Detection</div>
+</div>
+
+<script>
+let stream, interval;
+const video=document.getElementById("video");
+const canvas=document.getElementById("canvas");
+const ctx=canvas.getContext("2d");
+
+function startDetection(){
+    navigator.mediaDevices.getUserMedia({video:true})
+    .then(s=>{
+        stream=s;
+        video.srcObject=s;
+
+        interval=setInterval(sendFrame,900);
+    });
+}
+
+function stopDetection(){
+    if(stream) stream.getTracks().forEach(t=>t.stop());
+    clearInterval(interval);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    document.getElementById("count").innerText="Total Objects Detected: 0";
+    document.getElementById("desc").innerText="Detection stopped.";
+}
+
+async function sendFrame(){
+    ctx.drawImage(video,0,0,canvas.width,canvas.height);
+    const img=canvas.toDataURL("image/jpeg");
+
+    const res=await fetch("/detect",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({image:img})
+    });
+
+    const data=await res.json();
+
+    ctx.drawImage(video,0,0,canvas.width,canvas.height);
+    ctx.strokeStyle="lime";
+    ctx.lineWidth=2;
+
+    data.detections.forEach(d=>{
+        ctx.strokeRect(d.x,d.y,d.w,d.h);
+        ctx.fillText(`${d.label} (${d.w}x${d.h})`,d.x,d.y-5);
+    });
+
+    document.getElementById("count").innerText=
+        "Total Objects Detected: "+data.count;
+
+    document.getElementById("desc").innerText=
+        data.count>0 ? data.detections[0].desc : "No objects detected.";
+}
+</script>
+
+</body>
+</html>
